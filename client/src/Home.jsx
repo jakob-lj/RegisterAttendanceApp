@@ -3,7 +3,12 @@ import React, { useState } from 'react'
 
 const Home = () => {
 
-    const [email, setEmail] = useState('')
+    let initEmail = ''
+    if (process.env.NODE_ENV === 'development') {
+        initEmail = 'jakob@jakoblj.com'
+    }
+
+    const [email, setEmail] = useState(initEmail)
     const [register, setRegister] = useState(false)
     const [fed, setFed] = useState(false)
     const [err, setErr] = useState(false)
