@@ -64,7 +64,7 @@ app.post('/login', async (req, res) => {
         }
         const userId = seeIfEmailExists.rows[0].id
         const code = rand(1000, 10000)
-        const insertCode = await client.query('INSERT INTO SSO (user_id, code) values ($1::uuid, $2::text)', [userId, code])
+        //const insertCode = await client.query('INSERT INTO SSO (user_id, code) values ($1::uuid, $2::text)', [userId, code])
         send(email, 'SSO Kode', `For å logge inn, skriv inn følgende kode: ${code}`)  
         res.send({code})
     } catch (e) {
