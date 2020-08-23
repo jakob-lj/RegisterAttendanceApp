@@ -13,6 +13,7 @@ function App() {
     <Header />
     <Router>
       <Route path={'/register/:id/:token'} component={RegisterComponent} />
+      <Route path={'/app'} component={Start} />
       <Route path={'/'} exact component={Home} />
     </Router>
   </div>

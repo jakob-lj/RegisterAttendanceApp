@@ -21,6 +21,47 @@ const frontEndPoint = process.env.FRONTENDPOINT
 const app = express()
 app.use(bodyParser.json())
 app.use(cors(corsOptions))
+
+const auth = async (req, res, next) => {
+    const token = req.query.token
+    await jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        if (err === null) {
+            const r = await client.query('select * from users where 1=1')
+            if (r.rows.length === 1) {
+                req.userId = decoded.userId
+                return next()
+            } else {
+                return res.status(401).send({status: false})
+            }
+        } else {
+            return res.status(401).send({status: false})
+        }
+    })    
+}
+
+const apiAuth = async (req, res, next) => {
+    let akey
+    try {
+        akey = req.headers.authorization.split(' ')[1]
+    } catch (e) {
+        return res.status(401).send({status: false})
+    }
+    jwt.verify(akey, process.env.JWT_SECRET, async (err, decoded) => {
+        if (err === null) {
+            const r = await client.query('select user_id from apikeys where token = $1::text and key = $2::uuid', [akey, decoded.apiKey])
+            if (r.rows.length === 1) {
+                req.userId = r.rows[0].user_id
+                req.tokenId = akey
+                return next()
+            } else {
+                return res.status(401).send({status: false})
+            }
+        } else {
+            return res.status(401).send({status: false})
+        }
+    })
+}
+
 app.get('/', async (req, res) => {
     
     //const r = await client.query('SELECT $1::text as message', ['Hello world!'])
@@ -92,6 +133,23 @@ app.post('/users', async (req, res) => {
     }
 })
 
+app.get('/apiKeys', auth, async (req, res) => {
+    const r = await client.query('SELECT token, generatedat, name FROM apikeys WHERE user_id = $1::uuid', [req.userId])
+    
+    res.send({status: 'ok', rows: r.rows})   
+})
+
+app.post('/apiKeys', auth, async (req, res) => {
+    if (!req.body.name) {
+        return res.status(400).send({status: false, error: 'missing_info'})
+    }
+    const r = await client.query('INSERT INTO apikeys (user_id, name) values ($1::uuid, $2::text) RETURNING *', [req.userId, req.body.name])
+    const id = r.rows[0].key
+    const apikey = jwt.sign({apiKey: id}, process.env.JWT_SECRET)
+    const u = await client.query('UPDATE apikeys set token=$1::text where key=$2::uuid', [apikey, id])
+    res.send({status: 'ok'})
+})
+
 
 
 app.post('/register/:id', async (req, res) => {
@@ -111,5 +169,25 @@ app.post('/register/:id', async (req, res) => {
     }
 })
 
+app.post('/attendance', apiAuth, async (req, res) => {
+    if (req.body.text) {
+        const vaildDays = 28
+        const vaildTo = new Date(new Date().getTime() + vaildDays * (1000*60*60*24))
+        const r = await client.query('insert into  attendance (user_id, apikey_id, names, valid_to) values ($1::uuid, $2::uuid, $3::text, $4::timestamp) RETURNING *', [req.userId, req.apiKey, req.body.text, vaildTo])
+        const id = r.rows[0].id
+        res.send({status: 'ok', id: id})
+    } else {
+        return res.status(400).send({status: false, error: 'Missing text'})
+    }
+})
+
+app.get('/attendance', async (req, res) => {
+    const id = req.query.id
+    if (!id) {
+        return res.status(404).send()
+    }
+    const r = await client.query('select a.names, a.valid_to, u.name from attendance a inner join users u ON a.user_id = u.id where a.id = $1::uuid', [id])
+    return res.status(200).send({status: 'ok', result: r.rows[0]})
+})
 
 app.listen(8000)
